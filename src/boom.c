@@ -2,6 +2,7 @@
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <avr/sleep.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -192,28 +193,11 @@ char GetSevenCode (char val, char need_point)
 
 char PrintToSevenSeg(long value)
 {
-
-	static long last_val = 0;
-
-
-	if (last_val != value){
-		time[0] = ((value / 3600) / 10); // hours
-		time[1] = ((value / 3600) % 10); // hours
-		time[2] = ((value % 3600) / 60) / 10; // minutes
-		time[3] = ((value % 3600) / 60) % 10; // minutes
-		time[4] = (value % 60) / 10; // seconds
-		time[5] = (value % 60) % 10; // seconds
-		last_val = value;
-	}
-
 	for (char i = 0; i < 7; i++){
 		PORTA = (1 << i);
 		PORTE = GetSevenCode(time[i], i%2);
 		_delay_us(700);	
-
 	}
-
-	
 	return 0;
 }
 
@@ -453,6 +437,15 @@ void Port_Init()
 
 //-------------------------------------------------------------------
 
+
+void SleepInit()
+{
+	
+
+}
+
+//-------------------------------------------------------------------
+
 void SetupTIMER1 (void)
 {
      TCCR1B = (1<<CS12);
@@ -479,7 +472,7 @@ ISR (TIMER1_OVF_vect)
 
 
 	PrintToSevenSeg(timer_cur);
-
+/*
 	if (!is_key)
 		is_key = CheckKey();
 	else
@@ -488,9 +481,9 @@ ISR (TIMER1_OVF_vect)
 	key = GetButton();
 	if (key)
 		MenuSelect(key);
-
+*/
 	// run timer
-	TCNT1 = 65536- 30; //  31220;
+	TCNT1 = 65536- 100; //  31220;
     TCCR1B = (1<<CS12);
     TIMSK |= (1<<TOIE1);
 
@@ -501,6 +494,7 @@ ISR (TIMER1_OVF_vect)
 
 ISR (TIMER0_OVF_vect)
 {
+cli();
 
 //DEBUG
 if (!timer_cur--){
@@ -515,6 +509,17 @@ if (!timer_cur--){
 		
 		INVBIT(PORTA,6);
 	}	
+
+	time[0] = ((timer_cur / 3600) / 10); // hours
+	time[1] = ((timer_cur / 3600) % 10); // hours
+	time[2] = ((timer_cur % 3600) / 60) / 10; // minutes
+	time[3] = ((timer_cur % 3600) / 60) % 10; // minutes
+	time[4] = (timer_cur % 60) / 10; // seconds
+	time[5] = (timer_cur % 60) % 10; // seconds
+
+
+
+ sei();
 }
 
 
@@ -610,6 +615,8 @@ int main()
 	Port_Init();
 	MatrixKeyInit();
 
+	SleepInit();
+
 	LCD_Init();
 	LCDSendCommand(DISP_ON);
 	LCDSendCommand(CLR_DISP);
@@ -631,8 +638,8 @@ int main()
 	timer_cur = 86400;
 
 
-
-
+	//set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+	sleep_enable();
 	while (1) 
 	{
 /*
@@ -641,7 +648,7 @@ int main()
 		PORTB &= ~_BV(6); 
 		_delay_ms(500);
 */
-
+		sleep_cpu();	
 	}
 	return 0;
 }
