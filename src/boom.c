@@ -25,8 +25,9 @@
 #define LCDPORT PORTC
 #define BUTTONPIN PINA
 
-#define OKBUT 2
-#define NOBUT 4
+#define OKBUT 88	// *
+#define NOBUT 89	// #
+#define RESETBUT 9 // 9
 
 #define KEYIDLEN 8
 
@@ -81,8 +82,8 @@ char keyid 		 [KEYIDLEN] = "++++++++";
 char readedkeyid [KEYIDLEN] = "--------";
 
 
-long timer_init_val = 3600;
-long timer_cur = 0;
+long timer_init_val = 60*60*1;
+long timer_cur = 60*60*1;
 char time[6];
 
 
@@ -128,14 +129,18 @@ void clear_key()
 
 char GetButton()
 {
-	static unsigned char lastkey = 0;
+	static char was_released = 1;
 
-	unsigned char curkey = GetKey();
-	//curkey = 1;
+	char key = ReadFromKeyboard();
 
-		LCDSendCommand(DD_RAM_ADDR2);
-		LCDSendUnsafeCounteredTxt((curkey + 48), 1);
-		//LCDSendTxt("ASDFG");
+	if (key){
+		if (was_released){
+			was_released = 0;
+			return key;
+		}
+	}else{
+		was_released = 1;
+	}
 
 	return 0;
 }
@@ -189,14 +194,15 @@ char GetSevenCode (char val, char need_point)
 	
 }
 
-
+//--------------------------------------------------------------------
 
 char PrintToSevenSeg(long value)
 {
 	for (char i = 0; i < 7; i++){
 		PORTA = (1 << i);
 		PORTE = GetSevenCode(time[i], i%2);
-		_delay_us(700);	
+		_delay_us(500);	
+		PORTE = 0x00;
 	}
 	return 0;
 }
@@ -207,14 +213,15 @@ void GameOver()
 {
 	is_game = 0;
 	is_timer = 0;
+
 	LCDSendCommand(CLR_DISP); 
-	LCDSendUnsafeCounteredTxt(GAMEOVER, TEXTLEN);
+	//LCDSendUnsafeCounteredTxt(GAMEOVER, TEXTLEN);
+	LCDSendTxt("   GAME OVER!");
 
 	// reinit timer
 
 	timer_cur = timer_init_val;
-
-	UPBIT(PORTA,6);	
+	_delay_ms(3000);
 }
 
 //---------------------------------------------------------------
@@ -223,7 +230,7 @@ void GamePaused()
 {
 	is_timer = 0;
 
-	UPBIT(PORTA,6);
+	UPBIT(PORTB,6);
 }
 
 //---------------------------------------------------------------
@@ -240,7 +247,8 @@ void MakeBoom()
 	LCDSendCommand(DD_RAM_ADDR2);
 	LCDSendTxt(" BOOM BOOM BOOM ");
 
-	UPBIT(PORTA,6);	
+	DOWNBIT(PORTB,6);
+	_delay_ms(5000);
 	
 }
 
@@ -437,15 +445,6 @@ void Port_Init()
 
 //-------------------------------------------------------------------
 
-
-void SleepInit()
-{
-	
-
-}
-
-//-------------------------------------------------------------------
-
 void SetupTIMER1 (void)
 {
      TCCR1B = (1<<CS12);
@@ -472,7 +471,7 @@ ISR (TIMER1_OVF_vect)
 
 
 	PrintToSevenSeg(timer_cur);
-/*
+
 	if (!is_key)
 		is_key = CheckKey();
 	else
@@ -480,10 +479,10 @@ ISR (TIMER1_OVF_vect)
 
 	key = GetButton();
 	if (key)
-		MenuSelect(key);
-*/
+		MenuSelect(key-1);
+
 	// run timer
-	TCNT1 = 65536- 100; //  31220;
+	TCNT1 = 65536- 50; //  31220;
     TCCR1B = (1<<CS12);
     TIMSK |= (1<<TOIE1);
 
@@ -496,28 +495,18 @@ ISR (TIMER0_OVF_vect)
 {
 cli();
 
-//DEBUG
-if (!timer_cur--){
-
-	timer_cur=36000;
-}
-//NODEBUG
-
 	if (is_timer){
 		if (!(--timer_cur))
 			MakeBoom();	
-		
-		INVBIT(PORTA,6);
+		INVBIT(PORTB,6);
 	}	
-
+		
 	time[0] = ((timer_cur / 3600) / 10); // hours
 	time[1] = ((timer_cur / 3600) % 10); // hours
 	time[2] = ((timer_cur % 3600) / 60) / 10; // minutes
 	time[3] = ((timer_cur % 3600) / 60) % 10; // minutes
 	time[4] = (timer_cur % 60) / 10; // seconds
 	time[5] = (timer_cur % 60) % 10; // seconds
-
-
 
  sei();
 }
@@ -559,7 +548,12 @@ char GetSavedData()
 
 void CheckResset()
 {
-	if (!(BUTTONPIN & 0b00000001)){
+	char kkey = ReadFromKeyboard() - 1;
+
+	for (char i = 0; i < 10; i++)
+		kkey = ReadFromKeyboard() - 1;
+
+	if ( kkey == RESETBUT ){
 		char addrr;
 
 		addrr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_ADMPASS;
@@ -613,9 +607,7 @@ int main()
 {
 
 	Port_Init();
-	MatrixKeyInit();
-
-	SleepInit();
+	InitializeKeyboard();
 
 	LCD_Init();
 	LCDSendCommand(DISP_ON);
@@ -623,7 +615,7 @@ int main()
 
 
 
-//	CheckResset();
+	CheckResset();
 
 	GetSavedData();
 
@@ -632,10 +624,6 @@ int main()
 
 	SetupTIMER1();
 	SetupTIMER0();
-
-
-	// DEBUG
-	timer_cur = 86400;
 
 
 	//set_sleep_mode(SLEEP_MODE_PWR_DOWN);

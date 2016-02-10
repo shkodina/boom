@@ -9,9 +9,9 @@
 #define SCANLINE 4
 
 
-void MatrixKeyInit();
+void InitializeKeyboard();
 
-unsigned char GetKey();
+char ReadFromKeyboard();
 
 
 #endif // MYMATRIXKEYBOARD
