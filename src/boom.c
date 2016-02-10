@@ -223,6 +223,7 @@ void GameOver()
 	// reinit timer
 
 	timer_cur = timer_init_val;
+	DOWNBIT(PORTB,6);
 	_delay_ms(3000);
 }
 
@@ -292,11 +293,12 @@ char CheckState(char is_key_state)
 }
 
 //---------------------------------------------------------------
-
+#define MAX_OK_COUNTER 3
 char MenuSelect(char key)
 {	
 	static char pos = 0;
 	static char addrr = 0;
+	static char OK_COUNTER = 0;
 
 	if (key != OKBUT && key != NOBUT){ // some digit
 
@@ -315,6 +317,7 @@ char MenuSelect(char key)
 	}else{ // command buttons
 		if (key == NOBUT)
 		{
+			OK_COUNTER = 0;
 			if (is_timer){ // game already started
 				menu_pos = ESTOP;
 				LCDSendCommand(CLR_DISP); 
@@ -337,6 +340,10 @@ char MenuSelect(char key)
 			switch (menu_pos){
 
 				case ESTOP:
+					if (++OK_COUNTER != MAX_OK_COUNTER)
+						break;
+					OK_COUNTER = 0;
+
 					if ( StrCmp(curtext, stopcode, TEXTLEN) ){
 						LCDSendCommand(DD_RAM_ADDR2);
 						LCDSendTxt(WRONGCODE);
@@ -349,6 +356,10 @@ char MenuSelect(char key)
 					break;
 
 				case ESTART:
+					if (++OK_COUNTER != MAX_OK_COUNTER)
+						break;
+					OK_COUNTER = 0;
+
 					if ( StrCmp(curtext, startcode, TEXTLEN) ){
 						LCDSendCommand(DD_RAM_ADDR2);
 						LCDSendTxt(WRONGCODE);
@@ -418,9 +429,9 @@ char MenuSelect(char key)
 
 					}
 
-					timer_init_val = 	timer_d_val[0] * 60 *60 + 
-										timer_d_val[1] * 60 +
-										timer_d_val[2]	;
+					timer_init_val = 	(long)(timer_d_val[0]) * 60 * 60 + 
+										(long)(timer_d_val[1]) * 60 +
+										(long)(timer_d_val[2])	;
 
 					timer_cur = timer_init_val;
 
@@ -430,6 +441,7 @@ char MenuSelect(char key)
 					LCDSendCommand(DD_RAM_ADDR2);
 					LCDSendTxt(TIMEROK);
 					is_admin = 0;
+					MenuSelect(NOBUT);
 					break;
 
 				default:
@@ -439,10 +451,11 @@ char MenuSelect(char key)
 
 		}
 
-		for (char i = 0; i < TEXTLEN; i++)
-			curtext[i] = ' ';
-		pos = 0;
-			
+		if (!OK_COUNTER){
+			for (char i = 0; i < TEXTLEN; i++)
+				curtext[i] = ' ';
+			pos = 0;
+		}	
 	}
 
 	return 0;
@@ -514,9 +527,9 @@ ISR (TIMER0_OVF_vect)
 cli();
 
 	if (is_timer){
+		INVBIT(PORTB,6);
 		if (!(--timer_cur))
 			MakeBoom();	
-		INVBIT(PORTB,6);
 	}	
 		
 	time[0] = ((timer_cur / 3600) / 10); // hours
