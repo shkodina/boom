@@ -49,15 +49,15 @@
 #define EEPROMADRORDER_TIMER		3
 #define EEPROMADRORDER_KEY			4
 
-#define WRONGPASS 	"Wrong Password! "
-#define CORRECTPASS "Password OK!    "
-#define WRONGCODE 	"Wrong Code!     "
-#define CODEOK		"Code OK!        "
-#define TIMEROK		"Timer set ok!   "
-#define GAMEOVER	"   GAME OVER!   "
+char WRONGPASS[17] = {72,69,66,69,80,72,174,166,' ',168,65,80,79,167,196,'!',0};
+char CORRECTPASS[17] = {168,65,80,79,167,196,' ',168,80,165,72,177,84,'!',0,0,0};
+char WRONGCODE[17] = {72,69,66,69,80,72,174,166,' ',75,79,68,'!',0,0,0,0};
+char CODEOK[17] = {75,79,68,' ',168,80,165,72,177,84,'!',0,0,0,0,0,0};
+char TIMEROK[17] = {84,65,166,77,69,80,' ',164,65,68,65,72,'!',0,0,0,0};
+char GAMEOVER[17] = {' ',165,161,80,65,' ',79,75,79,72,171,69,72,65,'!',0,0};
 
 //------ global ------------------
-
+/*
 char menu [MENUCOUNT][TEXTLEN] =  {	"Enter STOP code ",	// 0
 									"Enter START code", // 1
 									"Enter Admin code", // 2
@@ -65,6 +65,15 @@ char menu [MENUCOUNT][TEXTLEN] =  {	"Enter STOP code ",	// 0
 									"SET START code  ", // 4
 									"SET STOP code   ", // 5
 									"SET Timer       "};// 6 
+*/
+char menu [MENUCOUNT][TEXTLEN] =  {	{168,65,80,79,167,196,' ',79,67,84,65,72,79,66,65,' '},
+									{168,65,80,79,167,196,' ',67,84,65,80,84,65,' ',' ',' '},	// 0
+									{168,65,80,79,167,196,' ',65,68,77,165,72,65,' ',' ',' '}, // 2
+									{72,79,66,174,166,' ',75,79,68,' ',65,68,77,165,72,65}, // 3
+									{72,79,66,174,166,' ',75,79,68,' ',67,84,65,80,84,65}, // 4
+									{72,79,66,174,166,' ',75,79,68,' ',67,84,79,168,' ',' '}, // 5
+									{164,65,68,65,84,196,' ',84,65,166,77,69,80,' ',' ',' '} };// 6 
+
 
 char menu_pos = ESTART;
 
@@ -73,6 +82,7 @@ char is_game = 0;
 char is_timer = 0;
 char is_key = 0;
 char is_reset = 0;
+char is_power_off = 1;
 
 char adminpass   [TEXTLEN] = "333                ";
 char startcode   [TEXTLEN] = "353                ";
@@ -126,6 +136,46 @@ void clear_key()
 }
 
 //---------------------------------------------------------------
+
+void PowerOff()
+{
+	is_power_off = 1; // timer and sevenseg off
+	DOWNBIT(PORTB,6); //  led off
+
+
+	LCDSendCommand(CLR_DISP);
+	//LCDSendTxt("  SLEEPING ");
+	char tt[17] = {' ',' ',' ',66,174,75,167,176,171,69,72,165,69,'.','.','.',0};
+	LCDSendTxt(tt);
+	_delay_ms(3000);
+
+
+	LCDSendCommand(CLR_DISP); // lcd off
+	DOWNBIT(PORTB,5); //  lcd led off
+
+}
+
+//----------------------------------------------------------------
+
+void PowerOn()
+{
+	menu_pos = ESTART;
+	is_power_off = 0;
+
+	UPBIT(PORTB,5); //  lcd led on
+
+	LCDSendCommand(CLR_DISP);
+//	LCDSendTxt("   STARTING   ");
+	char tt[17] = {' ',' ',168,80,79,160,169,163,68,69,72,165,69,'.','.','.',0};
+	LCDSendTxt(tt);
+	_delay_ms(3000);
+
+	LCDSendCommand(CLR_DISP);
+	LCDSendUnsafeCounteredTxt(menu[menu_pos], TEXTLEN);
+
+}
+
+//--------------------------------------------------------------------
 
 char GetButton()
 {
@@ -219,13 +269,16 @@ void GameOver()
 
 	LCDSendCommand(CLR_DISP); 
 	//LCDSendUnsafeCounteredTxt(GAMEOVER, TEXTLEN);
-	LCDSendTxt("   GAME OVER!");
+	LCDSendTxt(GAMEOVER);
 
 	// reinit timer
 
 	timer_cur = timer_init_val;
 	DOWNBIT(PORTB,6);
 	_delay_ms(3000);
+
+	PowerOff();
+
 }
 
 //---------------------------------------------------------------
@@ -246,10 +299,14 @@ void MakeBoom()
 
 	timer_cur = timer_init_val;
 
+	char tt[17] = {160,169,77,' ',160,169,77,' ',160,169,77,' ',160,169,77,' ',0};
+
 	LCDSendCommand(CLR_DISP);
-	LCDSendTxt(" BOOM BOOM BOOM "); 
+	//LCDSendTxt(" BOOM BOOM BOOM "); 
+	LCDSendTxt(tt);
 	LCDSendCommand(DD_RAM_ADDR2);
-	LCDSendTxt(" BOOM BOOM BOOM ");
+	//LCDSendTxt(" BOOM BOOM BOOM ");
+	LCDSendTxt(tt);
 
 	DOWNBIT(PORTB,6);
 
@@ -284,14 +341,27 @@ char CheckState(char is_key_state)
 
 	if (is_key_state == 1){ // first key, now just one 
 		if (is_game){
-			GameOver();
 			is_key = 0;
+			GameOver();
 			return 1;
 		}else{
 			is_key = 0;
-			menu_pos = EADMIN;
-			LCDSendCommand(CLR_DISP); 
-			LCDSendUnsafeCounteredTxt(menu[menu_pos], TEXTLEN);
+			
+			if (is_power_off){
+				PowerOn();
+			}else{
+				char kkey = 0;
+				for (char i = 0; i < 10; i++)
+					kkey = ReadFromKeyboard() - 1;
+
+				if ( kkey == RESETBUT ){
+					menu_pos = EADMIN;
+					LCDSendCommand(CLR_DISP); 
+					LCDSendUnsafeCounteredTxt(menu[menu_pos], TEXTLEN);
+				}else{
+					PowerOff();
+				}
+			}
 			return 1;				
 		}
 	}
@@ -472,7 +542,7 @@ char MenuSelect(char key)
 void Port_Init()
 {
 	PORTA = 0b00000000;		DDRA = 0b00111111;
-	PORTB = 0b00000000;		DDRB = 0b11000000;
+	PORTB = 0b00000000;		DDRB = 0b11100000;
 	LCDPORT = 0b00000000;	DDRC = 0b11110111;
 	PORTD = 0b11000000;		DDRD = 0b01000000;
 	PORTE = 0b00000000;		DDRE = 0b11111111;
@@ -484,7 +554,7 @@ void Port_Init()
 void SetupTIMER3 (void)
 {
      TCCR3B = (1<<CS12);
-     TCNT3 = 65536-50;        //???????? 1 ???????
+     TCNT3 = 65536-50;        
      ETIMSK |= (1<<TOIE3);
  	 sei();
 }
@@ -511,6 +581,10 @@ ISR (TIMER3_OVF_vect)
 {
 	TCNT3 = 65536- 50; 
     ETIMSK |= (1<<TOIE3);
+
+	if (is_power_off)
+		return;
+
 	PrintToSevenSeg(timer_cur);
 
 }
@@ -525,9 +599,13 @@ ISR (TIMER1_OVF_vect)
 	else
 		CheckState(is_key);
 
-	key = GetButton();
-	if (key)
-		MenuSelect(key-1);
+	if(!is_power_off){
+		key = GetButton();
+		if (key)
+			MenuSelect(key-1);
+	}
+
+
 
 	// run timer
 	TCNT1 = 65536 - 500; //  31220;
@@ -541,6 +619,9 @@ ISR (TIMER1_OVF_vect)
 
 ISR (TIMER0_OVF_vect)
 {
+	if(is_power_off)
+		return;
+
 cli();
 
 	if (is_timer){
@@ -602,6 +683,8 @@ void CheckResset()
 		kkey = ReadFromKeyboard() - 1;
 
 	if ( kkey == RESETBUT ){
+		UPBIT(PORTB,5);  // lcd led on
+
 		char addrr;
 
 		addrr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_ADMPASS;
@@ -617,7 +700,9 @@ void CheckResset()
 		eeprom_write_dword (addrr, timer_init_val);
 
 		LCDSendCommand(CLR_DISP);
-		LCDSendTxt("PUT THE KEY!");
+		//LCDSendTxt("PUT THE KEY!");
+		char tt1[17] = {168,80,165,167,79,163,165,84,69,' ',75,167,176,171,'!',0,0};
+		LCDSendTxt(tt1);
 
 		char is_exit = 0;
 		while (!is_exit) {
@@ -627,14 +712,18 @@ void CheckResset()
 			if ( StrCmp(readedkeyid, keyid, KEYIDLEN) ){ // считываются разные ключи
 				StrCp(readedkeyid, keyid, KEYIDLEN);
 				LCDSendCommand(CLR_DISP);
-				LCDSendTxt("WRONG KEY READ!");
+				//LCDSendTxt("WRONG KEY READ!");
+				char tt2[17] = {79,172,165,160,75,65,' ',75,167,176,171,65,'!',0,0,0,0};
+				LCDSendTxt(tt2);
 			}else{										// считанные ключи совпали
 				char addr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_KEY;
 				eeprom_write_block (keyid, addr, KEYIDLEN);
 				is_exit = 1;
 
 				LCDSendCommand(CLR_DISP);
-				LCDSendTxt("KEY READED!");
+//				LCDSendTxt("KEY READED!");
+				char tt3[17] = {75,167,176,171,' ',168,80,79,171,165,84,65,72,'!',0,0,0};
+				LCDSendTxt(tt3);
 
 				_delay_ms(5000);
 
@@ -661,22 +750,20 @@ int main()
 	LCDSendCommand(DISP_ON);
 	LCDSendCommand(CLR_DISP);
 
-
-
 	CheckResset();
 
 	GetSavedData();
 
 
-	LCDSendUnsafeCounteredTxt(menu[menu_pos], TEXTLEN);
-
 	SetupTIMER3();
 	SetupTIMER1();
 	SetupTIMER0();
 
+	PowerOff();
 
 	//set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 	sleep_enable();
+
 	while (1) 
 	{
 /*
