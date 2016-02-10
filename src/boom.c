@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <avr/eeprom.h>
+
 #include "lcd.h"
 
 #define LCDPORT PORTC
@@ -27,6 +29,12 @@
 #define SSTART 4
 #define SSTOP 5
 #define STIMER 6
+
+#define EEPROMADR_STARTADDR 		1
+#define EEPROMADRORDER_ADMPASS 		0
+#define EEPROMADRORDER_STARTCODE	1
+#define EEPROMADRORDER_STOPCODE		2
+#define EEPROMADRORDER_TIMER		3
 
 #define WRONGPASS 	"Wrong Password! "
 #define CORRECTPASS "Password OK!    "
@@ -195,6 +203,7 @@ void GameOver()
 
 	timer_cur = timer_init_val;
 
+	UPBIT(PORTA,6);	
 }
 
 //---------------------------------------------------------------
@@ -266,6 +275,7 @@ char CheckState(char is_key_state)
 char MenuSelect(char key)
 {	
 	static char pos = 0;
+	static char addrr = 0;
 
 	if (key != OKBUT && key != NOBUT){ // some digit
 
@@ -341,28 +351,45 @@ char MenuSelect(char key)
 
 				case SADMIN:
 					StrCp(curtext, adminpass, TEXTLEN);
+
+					addrr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_ADMPASS;
+					eeprom_write_block (adminpass, addrr, TEXTLEN);
+
 					LCDSendCommand(DD_RAM_ADDR2);
 					LCDSendTxt(CORRECTPASS);
 					break;
 
 				case SSTART:
 					StrCp(curtext, startcode, TEXTLEN);
+
+					addrr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_STARTCODE;
+					eeprom_write_block (startcode, addrr, TEXTLEN);
+
 					LCDSendCommand(DD_RAM_ADDR2);
 					LCDSendTxt(CODEOK);
 					break;
 
 				case SSTOP:
 					StrCp(curtext, stopcode, TEXTLEN);
+
+					addrr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_STOPCODE;
+					eeprom_write_block (stopcode, addrr, TEXTLEN);
+	
 					LCDSendCommand(DD_RAM_ADDR2);
 					LCDSendTxt(CODEOK);
 					break;
 
 				case STIMER:
+
 					for (char i = 0; i < TEXTLEN; i++)
 						if (curtext[i] == ' ')
 							curtext[i] = 0;	
 					timer_init_val = atoi(curtext);
 					timer_cur = timer_init_val;
+
+					addrr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_TIMER;
+					eeprom_write_dword (addrr, timer_init_val);
+
 					LCDSendCommand(DD_RAM_ADDR2);
 					LCDSendTxt(TIMEROK);
 					is_admin = 0;
@@ -440,7 +467,25 @@ ISR (TIMER3_OVF_vect)
 
 char GetSavedData()
 {
+	char addr = 0;
 
+	//get admin pass
+	addr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_ADMPASS;
+	eeprom_read_block (adminpass, addr, TEXTLEN);
+
+	//get start code
+	addr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_STARTCODE;
+	eeprom_read_block (startcode, addr, TEXTLEN);
+
+	//get stop code
+	addr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_STOPCODE;
+	eeprom_read_block (stopcode, addr, TEXTLEN);
+	
+
+	// get timer initial value
+	addr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_TIMER;
+	timer_init_val = eeprom_read_dword(addr);
+	
 
 	timer_cur = timer_init_val;
 	return 0;
@@ -448,11 +493,39 @@ char GetSavedData()
 
 //---------------------------------------------------------------
 
+void CheckResset()
+{
+	if (!(BUTTONPIN & 0b00000001)){
+		char addrr;
+
+		addrr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_ADMPASS;
+		eeprom_write_block (adminpass, addrr, TEXTLEN);
+
+		addrr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_STARTCODE;
+		eeprom_write_block (startcode, addrr, TEXTLEN);
+
+		addrr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_STOPCODE;
+		eeprom_write_block (stopcode, addrr, TEXTLEN);
+
+		addrr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_TIMER;
+		eeprom_write_dword (addrr, timer_init_val);
+	}
+}
+
+//---------------------------------------------------------------
+
 
 int main()
 {
-	GetSavedData();
 	Port_Init();
+
+	CheckResset();
+
+
+
+
+
+	GetSavedData();
 	LCD_Init();
 	//LCDSendCommand(DISP_OFF);
 	LCDSendCommand(DISP_ON);
