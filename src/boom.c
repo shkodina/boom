@@ -2,7 +2,6 @@
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#include <util/delay.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -12,6 +11,13 @@
 
 #include "onewire.h"
 #include "lcd.h"
+#include "keyboard.h"
+
+
+#define F_CPU 1000000UL
+#include <util/delay.h>
+
+
 
 
 
@@ -76,6 +82,8 @@ char readedkeyid [KEYIDLEN] = "--------";
 
 long timer_init_val = 3600;
 long timer_cur = 0;
+char time[6];
+
 
 //----------------------------------------------------------------
 
@@ -115,96 +123,97 @@ void clear_key()
 	}
 }
 
-//-------------------------------------------------------------------
-
-void SetupTIMER1 (void)
-{
-     //With 16 MHz clock and 65536 times counting T/C1 overflow interrupt
-     // will occur every:
-     //   1<<CS10                  4096 mkS  (no prescale Fclk)
-     //   1<<CS11                  32.768 mS (Fclk/8)
-     //  (1<<CS11)|(1<<CS10)       262.144 mS (Fclk/64)
-     //   1<<CS12                  1048.576 mS (Fclk/256)
-     TCCR1B = (1<<CS12);
-     TCNT1 = 65536-62439;        //примерно 1 секунда
-     /* Enable timer 1 overflow interrupt. */
-     TIMSK |= (1<<TOIE1);
-
-	
- 	 sei();
-}
-
-//---------------------------------------------------------------
-
-void SetupTIMER3 (void)
-{
-     //With 16 MHz clock and 65536 times counting T/C1 overflow interrupt
-     // will occur every:
-     //   1<<CS10                  4096 mkS  (no prescale Fclk)
-     //   1<<CS11                  32.768 mS (Fclk/8)
-     //  (1<<CS11)|(1<<CS10)       262.144 mS (Fclk/64)
-     //   1<<CS12                  1048.576 mS (Fclk/256)
-     TCCR3B = (1<<CS12);
-     TCNT3 = 65536-62439;        //примерно 1 секунда
-     /* Enable timer 1 overflow interrupt. */
-     ETIMSK |= (1<<TOIE3);
-
- 	 sei();
-}
-
 //---------------------------------------------------------------
 
 char GetButton()
 {
-	static char all_released = 0;
+	static unsigned char lastkey = 0;
 
-	if (!(BUTTONPIN & 0b00000001) && all_released){
-		all_released = 0;
-		return 1;	
-	}
-	
-	if (!(BUTTONPIN & 0b00000010) && all_released){
-		all_released = 0;
-		return 2;	
-	}
+	unsigned char curkey = GetKey();
+	//curkey = 1;
 
-	if (!(BUTTONPIN & 0b00000100) && all_released){
-		all_released = 0;
-		return 3;	
-	}
-
-	if (!(BUTTONPIN & 0b00001000) && all_released){
-		all_released = 0;
-		return 4;	
-	}
-
-	if (!(BUTTONPIN & 0b00010000) && all_released){
-		all_released = 0;
-		return 5;	
-	}
-
-	if (    ((PINA & 0b00000001)
-			|(PINA & 0b00000010)
-			|(PINA & 0b00000100)
-			|(PINA & 0b00001000)
-			|(PINA & 0b00010000)) == 31)
-	all_released = 1; //all bottons are released
+		LCDSendCommand(DD_RAM_ADDR2);
+		LCDSendUnsafeCounteredTxt((curkey + 48), 1);
+		//LCDSendTxt("ASDFG");
 
 	return 0;
 }
 
 //---------------------------------------------------------------
 
+char GetSevenCode (char val, char need_point)
+{
+	char res = 0;
+	switch (val){
+		case 1:
+			res = 0b00000110;
+			break;
+		case 2:
+			res = 0b01011011;
+			break;
+		case 3:
+			res = 0b01001111;
+			break;
+		case 4:
+			res = 0b01100110;
+			break;
+		case 5:
+			res = 0b01101101;
+			break;
+		case 6:
+			res = 0b01111101;
+			break;
+		case 7:
+			res = 0b00000111;
+			break;
+		case 8:
+			res = 0b01111111;
+			break;
+		case 9:
+			res = 0b01101111;
+			break;
+		case 0:
+			res = 0b00111111;
+			break;
+
+		default:
+			res = 0b00000000;
+			break;
+	}
+
+	if (need_point)
+		res |= 0b10000000;
+
+	return res;
+	
+}
+
+
+
 char PrintToSevenSeg(long value)
 {
-	char stext	 [TEXTLEN];
 
-	sprintf(stext,"%d",value);
+	static long last_val = 0;
 
-	LCDSendCommand(DD_RAM_ADDR);
 
-	LCDSendTxt(stext);
+	if (last_val != value){
+		time[0] = ((value / 3600) / 10); // hours
+		time[1] = ((value / 3600) % 10); // hours
+		time[2] = ((value % 3600) / 60) / 10; // minutes
+		time[3] = ((value % 3600) / 60) % 10; // minutes
+		time[4] = (value % 60) / 10; // seconds
+		time[5] = (value % 60) % 10; // seconds
+		last_val = value;
+	}
 
+	for (char i = 0; i < 7; i++){
+		PORTA = (1 << i);
+		PORTE = GetSevenCode(time[i], i%2);
+		_delay_us(700);	
+
+	}
+
+	
 	return 0;
 }
 
@@ -433,23 +442,41 @@ char MenuSelect(char key)
 
 void Port_Init()
 {
-	PORTA = 0b00000000;		DDRA = 0b11000000;
-//	PORTB = 0b00000000;		DDRB = 0b00000000;
+	PORTA = 0b00000000;		DDRA = 0b00111111;
+	PORTB = 0b00000000;		DDRB = 0b11000000;
 	LCDPORT = 0b00000000;	DDRC = 0b11110111;
-//	PORTD = 0b11000000;		DDRD = 0b00001000;
-//	PORTE = 0b00000000;		DDRE = 0b00110000;
-//	PORTF = 0b00000000;		DDRF = 0b00000000;	
+	PORTD = 0b11000000;		DDRD = 0b00000000;
+	PORTE = 0b00000000;		DDRE = 0b11111111;
+	PORTF = 0b00000000;		DDRF = 0b00001111;	
 //	PORTG = 0b00000000;		DDRG = 0b00000000;
 }
 
+//-------------------------------------------------------------------
+
+void SetupTIMER1 (void)
+{
+     TCCR1B = (1<<CS12);
+     TCNT1 = 65536-50;        
+     TIMSK |= (1<<TOIE1); // разрешим прерывание по таймеру
+ 	 sei();
+}
+
+//---------------------------------------------------------------
+
+void SetupTIMER0 (void)
+{
+	TIMSK &=~(1<<OCIE0 | 1<< TOIE0);	// Запрещаем прерывания таймера 2
+	ASSR  = 1<<AS0;				// Включаем асинхронный режим
+	TCNT0 = 0;
+	TCCR0 = 5<<CS20; 
+	TIMSK |= 1<< TOIE0;
+}
 //---------------------------------------------------------------
 
 ISR (TIMER1_OVF_vect)
 {
 	static char key = 0;
-	TCNT1 = 65536- 6244; //  31220;
-    TCCR1B = (1<<CS12);
-    TIMSK |= (1<<TOIE1);
+
 
 	PrintToSevenSeg(timer_cur);
 
@@ -462,16 +489,25 @@ ISR (TIMER1_OVF_vect)
 	if (key)
 		MenuSelect(key);
 
+	// run timer
+	TCNT1 = 65536- 30; //  31220;
+    TCCR1B = (1<<CS12);
+    TIMSK |= (1<<TOIE1);
+
+
 }
 
 //---------------------------------------------------------------
 
-ISR (TIMER3_OVF_vect)
+ISR (TIMER0_OVF_vect)
 {
-	TCNT3 = 65536- 62439; 
-//    TCCR3B = (1<<CS12);
-    ETIMSK |= (1<<TOIE3);
 
+//DEBUG
+if (!timer_cur--){
+
+	timer_cur=36000;
+}
+//NODEBUG
 
 	if (is_timer){
 		if (!(--timer_cur))
@@ -480,6 +516,7 @@ ISR (TIMER3_OVF_vect)
 		INVBIT(PORTA,6);
 	}	
 }
+
 
 //---------------------------------------------------------------
 
@@ -569,7 +606,9 @@ void CheckResset()
 
 int main()
 {
+
 	Port_Init();
+	MatrixKeyInit();
 
 	LCD_Init();
 	LCDSendCommand(DISP_ON);
@@ -577,7 +616,7 @@ int main()
 
 
 
-	CheckResset();
+//	CheckResset();
 
 	GetSavedData();
 
@@ -585,11 +624,24 @@ int main()
 	LCDSendUnsafeCounteredTxt(menu[menu_pos], TEXTLEN);
 
 	SetupTIMER1();
-	SetupTIMER3();
+	SetupTIMER0();
+
+
+	// DEBUG
+	timer_cur = 86400;
+
+
+
 
 	while (1) 
 	{
-		
+/*
+		PORTB |= _BV(6);
+		_delay_ms(500);
+		PORTB &= ~_BV(6); 
+		_delay_ms(500);
+*/
+
 	}
 	return 0;
 }

@@ -4,7 +4,7 @@
 
 ## General Flags
 PROJECT = boom
-MCU = atmega128
+MCU = atmega64
 TARGET = boom.elf
 CC = avr-gcc
 
@@ -15,7 +15,7 @@ COMMON = -mmcu=$(MCU)
 
 ## Compile options common for all C compilation units.
 CFLAGS = $(COMMON)
-CFLAGS += -Wall -gdwarf-2 -std=gnu99   -DF_CPU=16000000UL -Os -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
+CFLAGS += -Wall -gdwarf-2 -std=gnu99               -DF_CPU=12500UL -Os -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
 CFLAGS += -MD -MP -MT $(*F).o -MF dep/$(@F).d 
 
 ## Assembly specific flags
@@ -37,7 +37,7 @@ HEX_EEPROM_FLAGS += --change-section-lma .eeprom=0 --no-change-warnings
 
 
 ## Objects that must be built in order to link
-OBJECTS = boom.o lcd.o onewire.o 
+OBJECTS = boom.o lcd.o onewire.o keyboard.o 
 
 ## Objects explicitly added by the user
 LINKONLYOBJECTS = 
@@ -53,6 +53,9 @@ lcd.o: ../lcd.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
 onewire.o: ../onewire.c
+	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
+
+keyboard.o: ../keyboard.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
 ##Link
