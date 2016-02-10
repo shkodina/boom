@@ -57,10 +57,16 @@ char startcode   [TEXTLEN] = "353                ";
 char stopcode    [TEXTLEN] = "535                ";
 char curtext	 [TEXTLEN];
 
-int timer_init_val = 60;
-int timer_cur = 0;
+long timer_init_val = 3600;
+long timer_cur = 0;
 
-//--------------------------------
+//----------------------------------------------------------------
+
+#define INVBIT(port, bit) port = port ^ (1<<bit);
+#define UPBIT(port, bit) port = port | (1<<bit);
+#define DOWNBIT(port, bit) port = port & (~(1<<bit));
+
+//----------------------------------------------------------------
 
 char StrCmp(char * origin, char * copy, char len)
 {
@@ -96,9 +102,27 @@ void SetupTIMER1 (void)
      TCCR1B = (1<<CS12);
      TCNT1 = 65536-62439;        //примерно 1 секунда
      /* Enable timer 1 overflow interrupt. */
-     TIMSK = (1<<TOIE1);
+     TIMSK |= (1<<TOIE1);
 
 	
+ 	 sei();
+}
+
+//---------------------------------------------------------------
+
+void SetupTIMER3 (void)
+{
+     //With 16 MHz clock and 65536 times counting T/C1 overflow interrupt
+     // will occur every:
+     //   1<<CS10                  4096 mkS  (no prescale Fclk)
+     //   1<<CS11                  32.768 mS (Fclk/8)
+     //  (1<<CS11)|(1<<CS10)       262.144 mS (Fclk/64)
+     //   1<<CS12                  1048.576 mS (Fclk/256)
+     TCCR3B = (1<<CS12);
+     TCNT3 = 65536-62439;        //примерно 1 секунда
+     /* Enable timer 1 overflow interrupt. */
+     ETIMSK |= (1<<TOIE3);
+
  	 sei();
 }
 
@@ -145,9 +169,15 @@ char GetButton()
 
 //---------------------------------------------------------------
 
-char PrintToSevenSeg(char value)
+char PrintToSevenSeg(long value)
 {
+	char stext	 [TEXTLEN];
 
+	sprintf(stext,"%d",value);
+
+	LCDSendCommand(DD_RAM_ADDR);
+
+	LCDSendTxt(stext);
 
 	return 0;
 }
@@ -162,7 +192,8 @@ void GameOver()
 	LCDSendUnsafeCounteredTxt(GAMEOVER, TEXTLEN);
 
 	// reinit timer
-	// TODO
+
+	timer_cur = timer_init_val;
 
 }
 
@@ -170,8 +201,27 @@ void GameOver()
 
 void GamePaused()
 {
+	is_timer = 0;
 
+	UPBIT(PORTA,6);
+}
 
+//---------------------------------------------------------------
+
+void MakeBoom()
+{
+	is_timer = 0;
+	is_game = 0;
+
+	timer_cur = timer_init_val;
+
+	LCDSendCommand(CLR_DISP);
+	LCDSendTxt(" BOOM BOOM BOOM "); 
+	LCDSendCommand(DD_RAM_ADDR2);
+	LCDSendTxt(" BOOM BOOM BOOM ");
+
+	UPBIT(PORTA,6);	
+	
 }
 
 //---------------------------------------------------------------
@@ -262,7 +312,7 @@ char MenuSelect(char key)
 					}else{
 						LCDSendCommand(DD_RAM_ADDR2);
 						LCDSendTxt(CODEOK);
-						is_timer = 0;
+						GamePaused();
 					}
 					break;
 
@@ -312,6 +362,7 @@ char MenuSelect(char key)
 						if (curtext[i] == ' ')
 							curtext[i] = 0;	
 					timer_init_val = atoi(curtext);
+					timer_cur = timer_init_val;
 					LCDSendCommand(DD_RAM_ADDR2);
 					LCDSendTxt(TIMEROK);
 					is_admin = 0;
@@ -337,7 +388,7 @@ char MenuSelect(char key)
 
 void Port_Init()
 {
-	PORTA = 0b00000000;		DDRA = 0b01000000;
+	PORTA = 0b00000000;		DDRA = 0b11000000;
 //	PORTB = 0b00000000;		DDRB = 0b00000000;
 	LCDPORT = 0b00000000;	DDRC = 0b11110111;
 //	PORTD = 0b11000000;		DDRD = 0b00001000;
@@ -353,7 +404,9 @@ ISR (TIMER1_OVF_vect)
 	static char key = 0;
 	TCNT1 = 65536- 6244; //  31220;
     TCCR1B = (1<<CS12);
-    TIMSK = (1<<TOIE1);
+    TIMSK |= (1<<TOIE1);
+
+	PrintToSevenSeg(timer_cur);
 
 	if (!is_key)
 		is_key = CheckKey();
@@ -368,11 +421,28 @@ ISR (TIMER1_OVF_vect)
 
 //---------------------------------------------------------------
 
+ISR (TIMER3_OVF_vect)
+{
+	TCNT3 = 65536- 62439; 
+//    TCCR3B = (1<<CS12);
+    ETIMSK |= (1<<TOIE3);
+
+
+	if (is_timer){
+		if (!(--timer_cur))
+			MakeBoom();	
+		
+		INVBIT(PORTA,6);
+	}	
+}
+
+//---------------------------------------------------------------
+
 char GetSavedData()
 {
 
 
-	
+	timer_cur = timer_init_val;
 	return 0;
 }
 
@@ -381,7 +451,7 @@ char GetSavedData()
 
 int main()
 {
-
+	GetSavedData();
 	Port_Init();
 	LCD_Init();
 	//LCDSendCommand(DISP_OFF);
@@ -392,6 +462,7 @@ int main()
 	LCDSendUnsafeCounteredTxt(menu[menu_pos], TEXTLEN);
 
 	SetupTIMER1();
+	SetupTIMER3();
 
 	while (1) 
 	{
