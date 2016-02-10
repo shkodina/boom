@@ -205,6 +205,7 @@ char PrintToSevenSeg(long value)
 		PORTA = 0x00;
 		PORTE = 0x00;
 		_delay_us(20);
+
 	}
 	return 0;
 }
@@ -480,13 +481,19 @@ void Port_Init()
 }
 
 //-------------------------------------------------------------------
-
+void SetupTIMER3 (void)
+{
+     TCCR3B = (1<<CS12);
+     TCNT3 = 65536-50;        //???????? 1 ???????
+     ETIMSK |= (1<<TOIE3);
+ 	 sei();
+}
+//--------------------------------------------------------------------
 void SetupTIMER1 (void)
 {
      TCCR1B = (1<<CS12);
      TCNT1 = 65536-50;        
      TIMSK |= (1<<TOIE1); // разрешим прерывание по таймеру
- 	 sei();
 }
 
 //---------------------------------------------------------------
@@ -500,13 +507,18 @@ void SetupTIMER0 (void)
 	TIMSK |= 1<< TOIE0;
 }
 //---------------------------------------------------------------
+ISR (TIMER3_OVF_vect)
+{
+	TCNT3 = 65536- 50; 
+    ETIMSK |= (1<<TOIE3);
+	PrintToSevenSeg(timer_cur);
 
+}
+//---------------------------------------------------------------
 ISR (TIMER1_OVF_vect)
 {
 	static char key = 0;
 
-
-	PrintToSevenSeg(timer_cur);
 
 	if (!is_key)
 		is_key = CheckKey();
@@ -518,7 +530,7 @@ ISR (TIMER1_OVF_vect)
 		MenuSelect(key-1);
 
 	// run timer
-	TCNT1 = 65536 - 100; //  31220;
+	TCNT1 = 65536 - 500; //  31220;
     TCCR1B = (1<<CS12);
     TIMSK |= (1<<TOIE1);
 
@@ -658,6 +670,7 @@ int main()
 
 	LCDSendUnsafeCounteredTxt(menu[menu_pos], TEXTLEN);
 
+	SetupTIMER3();
 	SetupTIMER1();
 	SetupTIMER0();
 
