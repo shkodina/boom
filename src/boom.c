@@ -32,6 +32,8 @@
 #define CORRECTPASS "Password OK!    "
 #define WRONGCODE 	"Wrong Code!     "
 #define CODEOK		"Code OK!        "
+#define TIMEROK		"Timer set ok!   "
+#define GAMEOVER	"   GAME OVER!   "
 
 //------ global ------------------
 
@@ -46,12 +48,13 @@ char menu [MENUCOUNT][TEXTLEN] =  {	"Enter STOP code ",	// 0
 char menu_pos = ESTART;
 
 char is_admin = 0;
-
 char is_game = 0;
+char is_timer = 0;
+char is_key = 0;
 
-char adminpass   [TEXTLEN] = "111                ";
-char startcode   [TEXTLEN] = "135                ";
-char stopcode    [TEXTLEN] = "531                ";
+char adminpass   [TEXTLEN] = "333                ";
+char startcode   [TEXTLEN] = "353                ";
+char stopcode    [TEXTLEN] = "535                ";
 char curtext	 [TEXTLEN];
 
 int timer_init_val = 60;
@@ -68,6 +71,16 @@ char StrCmp(char * origin, char * copy, char len)
 		}
 	}
 	return 0;
+}
+
+//--------------------------------
+
+void StrCp(char * origin, char * copy, char len)
+{
+
+	for (char i = 0; i < len; i++){
+		copy[i] = origin[i];
+	}	
 }
 
 //--------------------------------
@@ -94,12 +107,12 @@ void SetupTIMER1 (void)
 char GetButton()
 {
 	static char all_released = 0;
-
+/*
 	if (!(BUTTONPIN & 0b00000001) && all_released){
 		all_released = 0;
 		return 1;	
 	}
-	
+*/	
 	if (!(BUTTONPIN & 0b00000010) && all_released){
 		all_released = 0;
 		return 2;	
@@ -120,11 +133,11 @@ char GetButton()
 		return 5;	
 	}
 
-	if (    ((PINA & 0b00000001)
-			|(PINA & 0b00000010)
+	if (    (/*(PINA & 0b00000001)
+			|*/(PINA & 0b00000010)
 			|(PINA & 0b00000100)
 			|(PINA & 0b00001000)
-			|(PINA & 0b00010000)) == 31)
+			|(PINA & 0b00010000)) == 30)//31)
 	all_released = 1; //all bottons are released
 
 	return 0;
@@ -136,6 +149,65 @@ char PrintToSevenSeg(char value)
 {
 
 
+	return 0;
+}
+
+//---------------------------------------------------------------
+
+void GameOver()
+{
+	is_game = 0;
+	is_timer = 0;
+	LCDSendCommand(CLR_DISP); 
+	LCDSendUnsafeCounteredTxt(GAMEOVER, TEXTLEN);
+
+	// reinit timer
+	// TODO
+
+}
+
+//---------------------------------------------------------------
+
+void GamePaused()
+{
+
+
+}
+
+//---------------------------------------------------------------
+
+char CheckKey ()
+{
+	static char was_released = 0;
+	if (!(BUTTONPIN & 0b00000001) && was_released){
+		was_released = 0;
+		return 1;	
+	}
+	
+	if (PINA & 0b00000001)
+		was_released = 1;
+
+	return 0;
+}
+
+//---------------------------------------------------------------
+
+char CheckState(char is_key_state)
+{
+
+	if (is_key_state == 1){ // first key, now just one 
+		if (is_game){
+			GameOver();
+			is_key = 0;
+			return 1;
+		}else{
+			is_key = 0;
+			menu_pos = EADMIN;
+			LCDSendCommand(CLR_DISP); 
+			LCDSendUnsafeCounteredTxt(menu[menu_pos], TEXTLEN);
+			return 1;				
+		}
+	}
 	return 0;
 }
 
@@ -162,21 +234,19 @@ char MenuSelect(char key)
 	}else{ // command buttons
 		if (key == NOBUT)
 		{
-			if (is_game){
+			if (is_timer){ // game already started
 				menu_pos = ESTOP;
 				LCDSendCommand(CLR_DISP); 
 				LCDSendUnsafeCounteredTxt(menu[menu_pos], TEXTLEN);
 				for (char i = 0; i < TEXTLEN; i++)
 					curtext[i] = ' ';
 				pos = 0;
-			}else{
+			}else{ // game not started
 				if (is_admin){
 					if (++menu_pos == MENUCOUNT)
-						menu_pos = 0; 
-
+						menu_pos = SADMIN; 
 				}else{
-					if (++menu_pos == SADMIN)
-						menu_pos = 0; 
+					menu_pos = ESTART; 
 				}
 			
 				LCDSendCommand(CLR_DISP); 
@@ -192,9 +262,10 @@ char MenuSelect(char key)
 					}else{
 						LCDSendCommand(DD_RAM_ADDR2);
 						LCDSendTxt(CODEOK);
-						is_game = 0;
+						is_timer = 0;
 					}
 					break;
+
 				case ESTART:
 					if ( StrCmp(curtext, startcode, TEXTLEN) ){
 						LCDSendCommand(DD_RAM_ADDR2);
@@ -202,6 +273,7 @@ char MenuSelect(char key)
 					}else{
 						LCDSendCommand(DD_RAM_ADDR2);
 						LCDSendTxt(CODEOK);
+						is_timer = 1;
 						is_game = 1;
 					}
 					break;
@@ -218,16 +290,31 @@ char MenuSelect(char key)
 					break;
 
 				case SADMIN:
-					;
+					StrCp(curtext, adminpass, TEXTLEN);
+					LCDSendCommand(DD_RAM_ADDR2);
+					LCDSendTxt(CORRECTPASS);
 					break;
+
 				case SSTART:
-					;
+					StrCp(curtext, startcode, TEXTLEN);
+					LCDSendCommand(DD_RAM_ADDR2);
+					LCDSendTxt(CODEOK);
 					break;
+
 				case SSTOP:
-					;
+					StrCp(curtext, stopcode, TEXTLEN);
+					LCDSendCommand(DD_RAM_ADDR2);
+					LCDSendTxt(CODEOK);
 					break;
+
 				case STIMER:
-					;
+					for (char i = 0; i < TEXTLEN; i++)
+						if (curtext[i] == ' ')
+							curtext[i] = 0;	
+					timer_init_val = atoi(curtext);
+					LCDSendCommand(DD_RAM_ADDR2);
+					LCDSendTxt(TIMEROK);
+					is_admin = 0;
 					break;
 
 				default:
@@ -267,6 +354,11 @@ ISR (TIMER1_OVF_vect)
 	TCNT1 = 65536- 6244; //  31220;
     TCCR1B = (1<<CS12);
     TIMSK = (1<<TOIE1);
+
+	if (!is_key)
+		is_key = CheckKey();
+	else
+		CheckState(is_key);
 
 	key = GetButton();
 	if (key)
