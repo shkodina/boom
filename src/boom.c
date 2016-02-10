@@ -32,7 +32,7 @@
 #define KEYIDLEN 8
 
 #define TEXTLEN 16
-#define MENUCOUNT 7
+
 
 #define ESTOP 0
 #define ESTART 1
@@ -41,6 +41,8 @@
 #define SSTART 4
 #define SSTOP 5
 #define STIMER 6
+#define STAT 7
+#define EXT 8
 
 #define EEPROMADR_STARTADDR 		1
 #define EEPROMADRORDER_ADMPASS 		0
@@ -66,13 +68,16 @@ char menu [MENUCOUNT][TEXTLEN] =  {	"Enter STOP code ",	// 0
 									"SET STOP code   ", // 5
 									"SET Timer       "};// 6 
 */
-char menu [MENUCOUNT][TEXTLEN] =  {	{168,65,80,79,167,196,' ',79,67,84,65,72,79,66,65,' '},
-									{168,65,80,79,167,196,' ',67,84,65,80,84,65,' ',' ',' '},	// 0
+#define MENUCOUNT 9
+char menu [MENUCOUNT][TEXTLEN] =  {	{168,65,80,79,167,196,' ',79,67,84,65,72,79,66,65,' '}, // 0
+									{168,65,80,79,167,196,' ',67,84,65,80,84,65,' ',' ',' '},	// 1
 									{168,65,80,79,167,196,' ',65,68,77,165,72,65,' ',' ',' '}, // 2
 									{72,79,66,174,166,' ',75,79,68,' ',65,68,77,165,72,65}, // 3
 									{72,79,66,174,166,' ',75,79,68,' ',67,84,65,80,84,65}, // 4
 									{72,79,66,174,166,' ',75,79,68,' ',67,84,79,168,' ',' '}, // 5
-									{164,65,68,65,84,196,' ',84,65,166,77,69,80,' ',' ',' '} };// 6 
+									{164,65,68,65,84,196,' ',84,65,166,77,69,80,' ',' ',' '}, //6
+									{'C','T','A','T',165,'C','T',165,'K','A',' ',' ',' ',' ',' ',' '}, // 7 
+									{'B',165,'X','O','D',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' '} }; //8
 
 
 char menu_pos = ESTART;
@@ -95,6 +100,10 @@ char readedkeyid [KEYIDLEN] = "--------";
 long timer_init_val = 60*60*1;
 long timer_cur = 60*60*1;
 char time[6];
+
+char statistic = 0;
+char lcd_led_timer = 0; 
+#define LCDLEDTIMERMAX 30
 
 
 //----------------------------------------------------------------
@@ -162,6 +171,7 @@ void PowerOn()
 	menu_pos = ESTART;
 	is_power_off = 0;
 
+	lcd_led_timer = LCDLEDTIMERMAX;
 	UPBIT(PORTB,5); //  lcd led on
 
 	LCDSendCommand(CLR_DISP);
@@ -314,7 +324,10 @@ void MakeBoom()
 	DDRD |= 0b01000000;
 	PORTD |= 0b01000000;
 
-	_delay_ms(5000);
+	_delay_ms(3000);
+	
+	PORTD &= 0b10111111;
+	
 	
 }
 
@@ -444,7 +457,9 @@ char MenuSelect(char key)
 						LCDSendTxt(CODEOK);
 						is_timer = 1;
 						is_game = 1;
+						statistic++; // for statistic
 						MenuSelect(NOBUT);
+						
 					}
 					break;
 
@@ -516,10 +531,24 @@ char MenuSelect(char key)
 
 					LCDSendCommand(DD_RAM_ADDR2);
 					LCDSendTxt(TIMEROK);
+//					is_admin = 0;
+//					MenuSelect(NOBUT);
+					break;
+
+				case STAT:
+					;char stattext[16];
+					sprintf( stattext,"CTAPT = %d", statistic);
+					LCDSendCommand(DD_RAM_ADDR2);
+					LCDSendTxt(stattext);
+					break;
+
+				case EXT:
+					LCDSendCommand(DD_RAM_ADDR2);
+					LCDSendTxt("   ");
 					is_admin = 0;
 					MenuSelect(NOBUT);
 					break;
-
+					
 				default:
 					break;
 
@@ -544,7 +573,7 @@ void Port_Init()
 	PORTA = 0b00000000;		DDRA = 0b00111111;
 	PORTB = 0b00000000;		DDRB = 0b11100000;
 	LCDPORT = 0b00000000;	DDRC = 0b11110111;
-	PORTD = 0b11000000;		DDRD = 0b01000000;
+	PORTD = 0b11000000;		DDRD = 0b00000000;
 	PORTE = 0b00000000;		DDRE = 0b11111111;
 	PORTF = 0b00000000;		DDRF = 0b00001111;	
 //	PORTG = 0b00000000;		DDRG = 0b00000000;
@@ -601,8 +630,13 @@ ISR (TIMER1_OVF_vect)
 
 	if(!is_power_off){
 		key = GetButton();
-		if (key)
+		if (key){
+		
+			lcd_led_timer = LCDLEDTIMERMAX;
+			UPBIT(PORTB, 5); //lcd led on
+			
 			MenuSelect(key-1);
+		}
 	}
 
 
@@ -623,6 +657,12 @@ ISR (TIMER0_OVF_vect)
 		return;
 
 cli();
+
+	if(lcd_led_timer){
+		lcd_led_timer--;
+	}else{
+		DOWNBIT(PORTB,5);
+	}
 
 	if (is_timer){
 		INVBIT(PORTB,6);
@@ -727,7 +767,7 @@ void CheckResset()
 
 				_delay_ms(5000);
 
-				LCDSendCommand(CLR_DISP);
+				//LCDSendCommand(CLR_DISP);
 
 				clear_key();
 			}
