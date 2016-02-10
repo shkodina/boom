@@ -297,7 +297,7 @@ void GamePaused()
 {
 	is_timer = 0;
 
-	UPBIT(PORTB,6);
+	DOWNBIT(PORTB,6);
 }
 
 //---------------------------------------------------------------
@@ -604,6 +604,8 @@ void SetupTIMER0 (void)
 	TCNT0 = 0;
 	TCCR0 = 5<<CS20; 
 	TIMSK |= 1<< TOIE0;
+
+	_delay_ms(1000);
 }
 //---------------------------------------------------------------
 ISR (TIMER3_OVF_vect)
@@ -795,9 +797,9 @@ int main()
 	GetSavedData();
 
 
-	SetupTIMER3();
-	SetupTIMER1();
 	SetupTIMER0();
+	SetupTIMER1();
+	SetupTIMER3();
 
 	PowerOff();
 
