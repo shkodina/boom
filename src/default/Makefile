@@ -37,7 +37,7 @@ HEX_EEPROM_FLAGS += --change-section-lma .eeprom=0 --no-change-warnings
 
 
 ## Objects that must be built in order to link
-OBJECTS = boom.o lcd.o 
+OBJECTS = boom.o lcd.o onewire.o 
 
 ## Objects explicitly added by the user
 LINKONLYOBJECTS = 
@@ -50,6 +50,9 @@ boom.o: ../boom.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
 lcd.o: ../lcd.c
+	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
+
+onewire.o: ../onewire.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
 ##Link

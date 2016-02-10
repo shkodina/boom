@@ -1,1 +1,1 @@
-<AVRWorkspace><IOSettings><CurrentRegisters/></IOSettings><part name="ATmega128"/><Files/></AVRWorkspace>
+<AVRWorkspace><IOSettings><CurrentRegisters/></IOSettings><part name="ATMEGA128"/><Files><File00000 Name="D:\AVR\boom\boom.c" Position="204 106 916 467" LineCol="355 0" State="Maximized"/><File00001 Name="D:\AVR\boom\onewire.c" Position="196 76 713 371" LineCol="4 16" State="Maximized"/><File00002 Name="D:\AVR\boom\onewire.h" Position="254 156 962 491" LineCol="3 4" State="Maximized"/></Files></AVRWorkspace>

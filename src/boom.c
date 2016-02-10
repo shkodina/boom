@@ -10,6 +10,7 @@
 
 #include <avr/eeprom.h>
 
+#include "onewire.h"
 #include "lcd.h"
 
 
@@ -69,8 +70,8 @@ char adminpass   [TEXTLEN] = "333                ";
 char startcode   [TEXTLEN] = "353                ";
 char stopcode    [TEXTLEN] = "535                ";
 char curtext	 [TEXTLEN];
-char keyid 		 [KEYIDLEN];
-char readedkeyid [KEYIDLEN];
+char keyid 		 [KEYIDLEN] = "++++++++";
+char readedkeyid [KEYIDLEN] = "--------";
 
 
 long timer_init_val = 3600;
@@ -83,151 +84,6 @@ long timer_cur = 0;
 #define DOWNBIT(port, bit) port = port & (~(1<<bit));
 
 //----------------------------------------------------------------
-//*******************************************************************************
-//*******************************************************************************
-//*******************************************************************************
-
-unsigned char tcnt, i;
-char buffer[8][8];
-
-//Вывод массива
-char check_key_id(void)
-{
-LCDSendCommand(CLR_DISP);
-
-	unsigned char bt = 0;
-	for (int n = 0; n < KEYIDLEN; n++)
-	    {
-			bt = 0;
-	        for(int n2 = 0;n2 < 8; n2++)
-	        {
-	 			if (buffer[n][n2]) {
-					bt |= (1 << n2);
-				}
-	        }
-			readedkeyid[n]=bt;
-			LCDSendUnsafeCounteredTxt(bt, 1);
-
-	    }    
-	if (is_reset){
-		// записать считанный код в память
-	}else{
-		for (char i = 0; i < KEYIDLEN; i++){
-			if (keyid[i] != readedkeyid[i])
-				return 0;
-		}
-	}
-	return 1;
-}
-
-//Функция сброса DS1990
-void reset_ds1990(void)
-{
-DDRB|=_BV(0);        // Вывод порта настраиваем как выход
-PORTB&=~_BV(0);
-
-cli();
-_delay_us(580); //Устанавливаем 0 в теч. около 480 мкс
-
-DDRB&=~_BV(0);       //Вывод порта настраиваем как вход
-_delay_us(70);  //Ожидание сигнала присутствия 70 мкс
-   if(PINB & (1<<PINB0))  //Если 1 - нет сигнала присутствия
-   {
-   _delay_us(410); //410 мкс
-   sei();
-   }   
-  else
-  {
-  _delay_us(410); //410 мкс
-  sei();
-  send_ds1990_command(0x33);
-  read_ds1990();
-  }
-}
-
-//Чтение
-
-void read_ds1990(void)
-{ 
-	cli(); 
-	  for(i = 0; i < 8; i++) // байтовый цикл
-	  {
-
-	    for(tcnt = 0; tcnt < 8; tcnt++)          // битовый цикл
-	    {
-
-	    DDRB|=_BV(0);
-	    PORTB&=~_BV(0);
-	    _delay_us(3);// ждем 6 мкс
-	    PORTB&=~_BV(0);
-	    DDRB&=~_BV(0);
-	    _delay_us(6); // ждем 9 мкс
-
-	 
-	            if(PINB & (1 << PINB0))
-	            {
-	            buffer[i][tcnt] = 1;
-	            }
-	            else
-	            {
-	            buffer[i][tcnt] = 0;
-	            }
-		_delay_us(120);
-	    }
-	    //_delay_ms(0.044);
-	 }
-
-	sei();
-    return check_key_id();
-}
-
-//Функция пересылки команд
-
-void send_ds1990_command(unsigned char command)
-{
-cli();
-unsigned char data=command;
-   for(i=0;i<8;i++)
-   {
-   data=data<<7;        //Сдвиг на i разрядов влево
-   command=command>>1;  //Сдвиг передаваемого байта
-     if(data==0x00)       //Передача лог.0
-     {
-     DDRB&=~_BV(0);
-     PORTB&=~_BV(0);          
-     _delay_us(15);  //10 мкс
-     DDRB|=_BV(0);
-     PORTB&=~_BV(0);
-     _delay_us(100);  //60 мкс
-     DDRB|=_BV(0);
-     PORTB|=_BV(0);     
-     _delay_us(2);   //Задержка примерно на 6 мкс
-      }
-     else                 //Передача лог.1
-     {
-/*     DDRB|=_BV(0);
-     PORTB|=_BV(0);     
-     _delay_us(6);   //Задержка примерно на 6 мкс
-     DDRB&=~_BV(0);  
-     PORTB&=~_BV(0);    
-     _delay_us(10);   //Задержка примерно на 64 мкс */
-	 
-     DDRB&=~_BV(0);
-     PORTB&=~_BV(0);          
-     _delay_us(15);  //10 мкс
-     DDRB|=_BV(0);
-     PORTB|=_BV(0);     
-     _delay_us(100);   //Задержка примерно на 6 мкс
- 	  
-     }
-   data=command;        //Новое значение для сдвига
-   };
-sei();
-}
-
-//*******************************************************************************
-//*******************************************************************************
-//*******************************************************************************
 
 char StrCmp(char * origin, char * copy, char len)
 {
@@ -240,7 +96,7 @@ char StrCmp(char * origin, char * copy, char len)
 	return 0;
 }
 
-//--------------------------------
+//-------------------------------------------------------------------
 
 void StrCp(char * origin, char * copy, char len)
 {
@@ -250,7 +106,16 @@ void StrCp(char * origin, char * copy, char len)
 	}	
 }
 
-//--------------------------------
+//-------------------------------------------------------------------
+
+void clear_key()
+{
+	for (char i = 0; i < KEYIDLEN; i++){
+		readedkeyid[i] = 255;
+	}
+}
+
+//-------------------------------------------------------------------
 
 void SetupTIMER1 (void)
 {
@@ -292,12 +157,12 @@ void SetupTIMER3 (void)
 char GetButton()
 {
 	static char all_released = 0;
-/*
+
 	if (!(BUTTONPIN & 0b00000001) && all_released){
 		all_released = 0;
 		return 1;	
 	}
-*/	
+	
 	if (!(BUTTONPIN & 0b00000010) && all_released){
 		all_released = 0;
 		return 2;	
@@ -318,11 +183,11 @@ char GetButton()
 		return 5;	
 	}
 
-	if (    (/*(PINA & 0b00000001)
-			|*/(PINA & 0b00000010)
+	if (    ((PINA & 0b00000001)
+			|(PINA & 0b00000010)
 			|(PINA & 0b00000100)
 			|(PINA & 0b00001000)
-			|(PINA & 0b00010000)) == 30)//31)
+			|(PINA & 0b00010000)) == 31)
 	all_released = 1; //all bottons are released
 
 	return 0;
@@ -390,18 +255,16 @@ void MakeBoom()
 
 char CheckKey ()
 {
-    reset_ds1990();
+	if (!reset_ds1990(readedkeyid, KEYIDLEN))
+		return 0;
+//	return !StrCmp(readedkeyid, keyid, KEYIDLEN);
 
-	static char was_released = 0;
-	if (!(BUTTONPIN & 0b00000001) && was_released){
-		was_released = 0;
-		return 1;	
+	if ( StrCmp(readedkeyid, keyid, KEYIDLEN) ){ // считываются разные ключи
+		return 0;
+	}else{
+		clear_key();
+		return 1;
 	}
-	
-	if (PINA & 0b00000001)
-		was_released = 1;
-
-	return 0;
 }
 
 //---------------------------------------------------------------
@@ -668,6 +531,36 @@ void CheckResset()
 
 		addrr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_TIMER;
 		eeprom_write_dword (addrr, timer_init_val);
+
+		LCDSendCommand(CLR_DISP);
+		LCDSendTxt("PUT THE KEY!");
+
+		char is_exit = 0;
+		while (!is_exit) {
+			if (!reset_ds1990(readedkeyid, KEYIDLEN))
+				continue;
+
+			if ( StrCmp(readedkeyid, keyid, KEYIDLEN) ){ // считываются разные ключи
+				StrCp(readedkeyid, keyid, KEYIDLEN);
+				LCDSendCommand(CLR_DISP);
+				LCDSendTxt("WRONG KEY READ!");
+			}else{										// считанные ключи совпали
+				char addr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_KEY;
+				eeprom_write_block (keyid, addr, KEYIDLEN);
+				is_exit = 1;
+
+				LCDSendCommand(CLR_DISP);
+				LCDSendTxt("KEY READED!");
+
+				_delay_ms(5000);
+
+				LCDSendCommand(CLR_DISP);
+
+				clear_key();
+			}
+			_delay_ms(10); // может кнопка недоприжалась
+		}
+
 	}
 }
 
@@ -678,20 +571,15 @@ int main()
 {
 	Port_Init();
 
+	LCD_Init();
+	LCDSendCommand(DISP_ON);
+	LCDSendCommand(CLR_DISP);
+
+
+
 	CheckResset();
 
 	GetSavedData();
-	LCD_Init();
-	//LCDSendCommand(DISP_OFF);
-	LCDSendCommand(DISP_ON);
-
-	LCDSendCommand(CLR_DISP);
-
-	while (1)
-    {
-    reset_ds1990();
-    }
-
 
 
 	LCDSendUnsafeCounteredTxt(menu[menu_pos], TEXTLEN);
