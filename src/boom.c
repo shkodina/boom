@@ -201,8 +201,10 @@ char PrintToSevenSeg(long value)
 	for (char i = 0; i < 7; i++){
 		PORTA = (1 << i);
 		PORTE = GetSevenCode(time[i], i%2);
-		_delay_us(500);	
+		_delay_us(200);	
+		PORTA = 0x00;
 		PORTE = 0x00;
+		_delay_us(20);
 	}
 	return 0;
 }
@@ -342,6 +344,7 @@ char MenuSelect(char key)
 						LCDSendCommand(DD_RAM_ADDR2);
 						LCDSendTxt(CODEOK);
 						GamePaused();
+						MenuSelect(NOBUT);
 					}
 					break;
 
@@ -354,6 +357,7 @@ char MenuSelect(char key)
 						LCDSendTxt(CODEOK);
 						is_timer = 1;
 						is_game = 1;
+						MenuSelect(NOBUT);
 					}
 					break;
 
@@ -403,7 +407,21 @@ char MenuSelect(char key)
 					for (char i = 0; i < TEXTLEN; i++)
 						if (curtext[i] == ' ')
 							curtext[i] = 0;	
-					timer_init_val = atoi(curtext);
+
+					char timer_val[3];
+					char timer_d_val[3];
+					for (char i = 0; i < 3; i++){
+						timer_val[0] = curtext [i*2]; 	
+						timer_val[1] = curtext [i*2 + 1]; 	
+						timer_val[2] = 0;
+						timer_d_val[i] = atoi(timer_val);
+
+					}
+
+					timer_init_val = 	timer_d_val[0] * 60 *60 + 
+										timer_d_val[1] * 60 +
+										timer_d_val[2]	;
+
 					timer_cur = timer_init_val;
 
 					addrr = EEPROMADR_STARTADDR + TEXTLEN * EEPROMADRORDER_TIMER;
@@ -482,7 +500,7 @@ ISR (TIMER1_OVF_vect)
 		MenuSelect(key-1);
 
 	// run timer
-	TCNT1 = 65536- 50; //  31220;
+	TCNT1 = 65536 - 100; //  31220;
     TCCR1B = (1<<CS12);
     TIMSK |= (1<<TOIE1);
 
